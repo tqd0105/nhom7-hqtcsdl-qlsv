@@ -84,7 +84,11 @@ Client sẽ chạy tại: `http://localhost:5173`
 Tạo file `.env` trong thư mục `backend` với các biến môi trường cần thiết:
 ```
 PORT=3000
-DATABASE_URL=your_database_url
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=qlsv
+DB_USER=username
+DB_PASSWORD=password
 ```
 
 ## Đóng góp
