@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
    "name": "backend",
   "version": "1.0.0",
   "description": "Backend API cho hệ thống quản lý sinh viên",
@@ -7,14 +6,12 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-=======
   "name": "backend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
->>>>>>> 584bb6bfde29465f734fb86cd60bad533d2d4e40
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -22,12 +19,8 @@
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
-<<<<<<< HEAD
     "express": "^5.2.1",
     "pg": "^8.11.3",
     "dotenv": "^16.3.1"
-=======
-    "express": "^5.2.1"
->>>>>>> 584bb6bfde29465f734fb86cd60bad533d2d4e40
   }
 }
