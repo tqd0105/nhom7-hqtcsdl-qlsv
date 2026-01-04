@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-<<<<<<< HEAD
 const { Pool } = require("pg");
 require("dotenv").config();
 
@@ -25,16 +24,10 @@ pool.connect((err, client, release) => {
     release();
   }
 });
-=======
-
-const app = express();
-const PORT = 3000;
->>>>>>> 584bb6bfde29465f734fb86cd60bad533d2d4e40
 
 app.use(cors());
 app.use(express.json());
 
-<<<<<<< HEAD
 // API test kết nối
 app.get("/api/xinchao", (req, res) => {
   res.json({ message: "Xin chào từ Express backend" });
@@ -562,11 +555,10 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Backend đang chạy tại http://localhost:${PORT}`);
 });
-=======
 app.get("/api/hello", (req, res) => {
   res.json({ message: "Hello from Express backend " });
 });
-
+  
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
 });
