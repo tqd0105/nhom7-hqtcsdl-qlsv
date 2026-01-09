@@ -212,21 +212,21 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       }
     }
 
-    // Cập nhật thông tin lớp
-    await pool.query(
-      `UPDATE lop 
-       SET malop = $1, tenlop = $2, khoa = $3 
-       WHERE malop = $4`,
-      [malop, tenlop, khoa, currentMalop]
-    );
-
-    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên
+    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên trước
     if (malop !== currentMalop) {
       await pool.query(
         "UPDATE sinhvien SET malop = $1 WHERE malop = $2",
         [malop, currentMalop]
       );
     }
+
+    // Sau đó mới cập nhật thông tin lớp
+    await pool.query(
+      `UPDATE lop 
+       SET malop = $1, tenlop = $2, khoa = $3 
+       WHERE malop = $4`,
+      [malop, tenlop, khoa, currentMalop]
+    );
     
     res.json({ 
       success: true,
