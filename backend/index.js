@@ -184,6 +184,9 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
   }
 
   try {
+    // Bắt đầu transaction
+    await pool.query('BEGIN');
+
     // Kiểm tra lớp hiện tại có tồn tại không
     const checkResult = await pool.query(
       "SELECT malop FROM lop WHERE malop = $1",
@@ -191,6 +194,7 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
     );
 
     if (checkResult.rowCount === 0) {
+      await pool.query('ROLLBACK');
       return res.status(404).json({ 
         success: false,
         error: "Lớp học không tồn tại" 
@@ -205,6 +209,7 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       );
 
       if (duplicateCheck.rowCount > 0) {
+        await pool.query('ROLLBACK');
         return res.status(400).json({ 
           success: false,
           error: "Mã lớp mới đã tồn tại" 
@@ -212,7 +217,15 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       }
     }
 
-    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên trước
+    // Cập nhật thông tin lớp trước
+    await pool.query(
+      `UPDATE lop 
+       SET malop = $1, tenlop = $2, khoa = $3 
+       WHERE malop = $4`,
+      [malop, tenlop, khoa, currentMalop]
+    );
+
+    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên
     if (malop !== currentMalop) {
       await pool.query(
         "UPDATE sinhvien SET malop = $1 WHERE malop = $2",
@@ -220,13 +233,8 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       );
     }
 
-    // Sau đó mới cập nhật thông tin lớp
-    await pool.query(
-      `UPDATE lop 
-       SET malop = $1, tenlop = $2, khoa = $3 
-       WHERE malop = $4`,
-      [malop, tenlop, khoa, currentMalop]
-    );
+    // Commit transaction
+    await pool.query('COMMIT');
     
     res.json({ 
       success: true,
@@ -234,6 +242,8 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       data: { malop, tenlop, khoa }
     });
   } catch (error) {
+    // Rollback nếu có lỗi
+    await pool.query('ROLLBACK');
     console.error("Lỗi cập nhật lớp:", error);
     
     if (error.code === '23505') {
