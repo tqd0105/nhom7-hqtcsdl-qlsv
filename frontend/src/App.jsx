@@ -18,12 +18,29 @@ function App() {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [authForm, setAuthForm] = useState({ user: '', pass: '' });
   const [authError, setAuthError] = useState('');
-  const [newClassName, setNewClassName] = useState('');
+  const [newClassName, setNewClassName] = useState({ malop: '', tenlop: '', khoa: '' });
   const [formData, setFormData] = useState({ masv: '', hoten: '', ngaysinh: '', gioitinh: 'Nam', malop: '' });
   const [gradeClassFilter, setGradeClassFilter] = useState(''); 
-  const [gradeData, setGradeData] = useState({ masv: '', diemqt: '', diemthi: '' });
+  const [gradeData, setGradeData] = useState({ masv: '', mamon: 'CSDL', hocky: 1, namhoc: '2024-2025', diemqt: '', diemthi: '' });
   const [editingStudent, setEditingStudent] = useState(null);
   const [originalMasv, setOriginalMasv] = useState(null);
+  const [editingClass, setEditingClass] = useState(null);
+  const [originalMalop, setOriginalMalop] = useState(null);
+
+  // Khôi phục trạng thái đăng nhập từ localStorage khi component mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser);
+        setCurrentUser(userData);
+        setIsLoggedIn(true);
+      } catch (error) {
+        console.error('Lỗi khi đọc thông tin đăng nhập:', error);
+        localStorage.removeItem('currentUser');
+      }
+    }
+  }, []);
 
   const fetchUsers = async () => {
   try {
@@ -38,30 +55,97 @@ function App() {
     console.error("Lỗi fetch users:", error);
   }
 };
-  // Fetch dữ liệu từ backend
-  const fetchData = async () => {
-    try {
-      const [resSv, resLop] = await Promise.all([
-        fetch(`${API_URL}/api/sinhvien`),
-        fetch(`${API_URL}/api/lop`)
-      ]);
-      
-      const dataSv = await resSv.json();
-      const dataLop = await resLop.json();
 
-      if (dataSv.success) {
-        const formattedStudents = dataSv.data.map(s => ({
+  // Fetch dữ liệu sinh viên kèm điểm
+  const fetchStudentsWithGrades = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/sinhvien-diem`);
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log("Dữ liệu sinh viên kèm điểm:", result.data);
+        const formattedStudents = result.data.map(s => ({
           ...s,
           ngaysinh: s.ngaysinh ? new Date(s.ngaysinh).toISOString().split('T')[0] : '',
           diemqt: s.diemqt || 0,
           diemthi: s.diemthi || 0,
-          diemtong: s.diemtong || 0
+          diemtong: s.diemtong || null
         }));
         setStudents(formattedStudents);
+        return true;
       }
+      return false;
+    } catch (error) {
+      console.error("Lỗi fetch sinh viên kèm điểm:", error);
+      return false;
+    }
+  };
+  // Fetch dữ liệu từ backend
+  const fetchData = async () => {
+    try {
+      // Thử fetch sinh viên kèm điểm trước
+      const hasGradeData = await fetchStudentsWithGrades();
       
-      if (dataLop.success) {
-        setClasses(dataLop.data.map(l => l.malop));
+      // Nếu không có API sinh viên kèm điểm, fetch riêng từng bảng
+      if (!hasGradeData) {
+        const [resSv, resLop] = await Promise.all([
+          fetch(`${API_URL}/api/sinhvien`),
+          fetch(`${API_URL}/api/lop`)
+        ]);
+        
+        const dataSv = await resSv.json();
+        const dataLop = await resLop.json();
+        
+        console.log("Dữ liệu sinh viên từ backend:", dataSv.data);
+        
+        if (dataSv.success) {
+          let formattedStudents = dataSv.data.map(s => ({
+            ...s,
+            ngaysinh: s.ngaysinh ? new Date(s.ngaysinh).toISOString().split('T')[0] : '',
+            diemqt: 0,
+            diemthi: 0,
+            diemtong: null
+          }));
+          
+          // Fetch điểm cho từng sinh viên
+          console.log("Đang fetch điểm cho từng sinh viên...");
+          for (let i = 0; i < formattedStudents.length; i++) {
+            try {
+              const resDiem = await fetch(`${API_URL}/api/diem/${formattedStudents[i].masv}`);
+              const dataDiem = await resDiem.json();
+              
+              if (dataDiem.success && dataDiem.data && dataDiem.data.length > 0) {
+                // Lấy điểm mới nhất (có thể có nhiều môn)
+                const latestGrade = dataDiem.data[0]; // Hoặc tính trung bình nhiều môn
+                formattedStudents[i] = {
+                  ...formattedStudents[i],
+                  diemqt: latestGrade.diemqt || 0,
+                  diemthi: latestGrade.diemthi || 0,
+                  diemtong: latestGrade.diemtong || null
+                };
+                console.log(`Đã lấy điểm cho ${formattedStudents[i].masv}:`, latestGrade);
+              } else {
+                console.log(`Không có điểm cho sinh viên ${formattedStudents[i].masv}`);
+              }
+            } catch (diemError) {
+              console.log(`Lỗi fetch điểm cho ${formattedStudents[i].masv}:`, diemError);
+            }
+          }
+          
+          console.log("Danh sách sinh viên sau khi merge điểm:", formattedStudents);
+          setStudents(formattedStudents);
+        }
+        
+        if (dataLop.success) {
+          setClasses(dataLop.data);
+        }
+      } else {
+        // Vẫn cần fetch dữ liệu lớp nếu đã có dữ liệu sinh viên kèm điểm
+        const resLop = await fetch(`${API_URL}/api/lop`);
+        const dataLop = await resLop.json();
+        if (dataLop.success) {
+          setClasses(dataLop.data);
+        }
       }
     } catch (error) {
       console.error("Lỗi fetch data:", error);
@@ -99,9 +183,11 @@ useEffect(() => {
   const displayedClasses = classes.filter(cls => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
-    const isClassNameMatch = cls.toLowerCase().includes(searchLower);
+    const isClassNameMatch = cls.malop?.toLowerCase().includes(searchLower) || 
+                             cls.tenlop?.toLowerCase().includes(searchLower) ||
+                             cls.khoa?.toLowerCase().includes(searchLower);
     const hasMatchingStudent = students.some(s => 
-      s.malop === cls && 
+      s.malop === cls.malop && 
       (s.hoten.toLowerCase().includes(searchLower) || s.masv.toLowerCase().includes(searchLower))
     );
     return isClassNameMatch || hasMatchingStudent;
@@ -182,9 +268,9 @@ useEffect(() => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               masv: originalMasv,
-              mamon: 'MH01', // Mặc định hoặc lấy từ dữ liệu
+              mamon: 'CSDL', // Mặc định môn Cơ sở dữ liệu
               hocky: 1,
-              namhoc: '2023-2024',
+              namhoc: '2024-2025',
               diemqt: editingStudent.diemqt,
               diemthi: editingStudent.diemthi
             })
@@ -199,6 +285,32 @@ useEffect(() => {
       }
     } catch (error) {
       Swal.fire('Lỗi', 'Lỗi kết nối server', 'error');
+    }
+  };
+
+  const handleEditClass = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${API_URL}/api/capnhatlop/${originalMalop}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          malop: editingClass.malop,
+          tenlop: editingClass.tenlop,
+          khoa: editingClass.khoa
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchData();
+        setEditingClass(null);
+        setOriginalMalop(null);
+        Swal.fire({ icon: 'success', title: 'Đã cập nhật', text: 'Thông tin lớp học đã được thay đổi thành công!', timer: 1500, showConfirmButton: false });
+      } else {
+        Swal.fire('Lỗi', data.error || 'Không thể cập nhật lớp', 'error');
+      }
+    } catch (error) {
+      Swal.fire('Thông báo', 'Tính năng cập nhật lớp hiện chưa được backend hỗ trợ.', 'info');
     }
   };
 
@@ -227,9 +339,12 @@ useEffect(() => {
           });
           const loginData = await loginRes.json();
           if (loginData.success) {
-            setCurrentUser({ user: loginData.data.username, isAdmin: loginData.data.role === 'admin' });
+            const userData = { user: loginData.data.username, isAdmin: loginData.data.role === 'admin' };
+            setCurrentUser(userData);
             setIsLoggedIn(true);
             setShowAuthModal(false);
+            // Lưu thông tin đăng nhập vào localStorage
+            localStorage.setItem('currentUser', JSON.stringify(userData));
             Swal.fire({ icon: 'success', title: 'Chào mừng!', text: `Đăng ký thành công tài khoản ${user}`, timer: 2000, showConfirmButton: false });
           }
         } else {
@@ -247,9 +362,12 @@ useEffect(() => {
         });
         const data = await response.json();
         if (data.success) {
-          setCurrentUser({ user: data.data.username, isAdmin: data.data.role === 'admin' });
+          const userData = { user: data.data.username, isAdmin: data.data.role === 'admin' };
+          setCurrentUser(userData);
           setIsLoggedIn(true);
           setShowAuthModal(false);
+          // Lưu thông tin đăng nhập vào localStorage
+          localStorage.setItem('currentUser', JSON.stringify(userData));
           Swal.fire({
             icon: 'success',
             title: 'Đăng nhập thành công',
@@ -337,9 +455,9 @@ useEffect(() => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 masv: masv,
-                mamon: 'MH01',
+                mamon: 'CSDL', // Mặc định môn Cơ sở dữ liệu
                 hocky: 1,
-                namhoc: '2023-2024',
+                namhoc: '2024-2025',
                 diemqt: q,
                 diemthi: t
               })
@@ -393,7 +511,13 @@ useEffect(() => {
                     <div className="small text-muted">Xin chào,</div>
                     <div className="fw-bold text-dark">{currentUser.user}</div>
                   </div>
-                  <button className="btn btn-outline-danger btn-sm rounded-pill px-3" onClick={() => {setIsLoggedIn(false); setCurrentUser(null); setActiveTab('home');}}>
+                  <button className="btn btn-outline-danger btn-sm rounded-pill px-3" onClick={() => {
+                    // Xóa thông tin đăng nhập khỏi localStorage
+                    localStorage.removeItem('currentUser');
+                    setIsLoggedIn(false); 
+                    setCurrentUser(null); 
+                    setActiveTab('home');
+                  }}>
                     Đăng xuất
                   </button>
                 </>
@@ -417,7 +541,7 @@ useEffect(() => {
               </button>
               
               <button onClick={() => setActiveTab('add_class')} className={`nav-link border-0 text-start rounded-3 p-3 transition-all ${activeTab === 'add_class' ? 'bg-primary text-white shadow' : 'text-muted'}`}>
-                <i className="fa-solid fa-folder-plus me-3"></i>Quản lý lớp học
+                <i className="fa-solid fa-folder-plus me-3"></i>Thêm lớp học
               </button>
               <button onClick={() => setActiveTab('add_student')} className={`nav-link border-0 text-start rounded-3 p-3 transition-all ${activeTab === 'add_student' ? 'bg-primary text-white shadow' : 'text-muted'}`}>
                 <i className="fa-solid fa-user-plus me-3"></i>Thêm sinh viên
@@ -472,7 +596,19 @@ useEffect(() => {
                                 <td>{s.hoten}</td>
                                 <td>{s.ngaysinh}</td>
                                 <td className="text-center"><span className={`badge rounded-pill ${s.gioitinh === 'Nam' ? 'bg-info-subtle text-info' : 'bg-danger-subtle text-danger'}`}>{s.gioitinh}</span></td>
-                                <td className="text-center fw-bold">{s.diemtong || 'Chưa có'}</td>
+                                <td className="text-center">
+                                  {s.diemtong ? (
+                                    <span className={`fw-bold ${
+                                      parseFloat(s.diemtong) >= 8.5 ? 'text-success' :
+                                      parseFloat(s.diemtong) >= 6.5 ? 'text-primary' :
+                                      parseFloat(s.diemtong) >= 5.0 ? 'text-warning' : 'text-danger'
+                                    }`}>
+                                      {parseFloat(s.diemtong).toFixed(1)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted small">Chưa có</span>
+                                  )}
+                                </td>
                                 <td className="pe-4 text-end">
                                   <button className="btn btn-light btn-sm rounded-circle me-2" onClick={() => {setEditingStudent({...s}); setOriginalMasv(s.masv);}}><i className="fa-solid fa-pen-to-square text-primary"></i></button>
                                   <button className="btn btn-light btn-sm rounded-circle" onClick={() => handleDeleteStudent(s.masv, s.hoten)}><i className="fa-solid fa-trash text-danger"></i></button>
@@ -486,19 +622,23 @@ useEffect(() => {
                   ) : (
                     <div className="row g-4">
                       {displayedClasses.map(cls => (
-                        <div key={cls} className="col-md-6 col-xl-4">
-                          <div className="card border-0 shadow-sm rounded-4 p-4 hover-card transition-all cursor-pointer" onClick={() => setSelectedClass(cls)}>
+                        <div key={cls.malop} className="col-md-6 col-xl-4">
+                          <div className="card border-0 shadow-sm rounded-4 p-4 hover-card transition-all cursor-pointer" onClick={() => setSelectedClass(cls.malop)}>
                             <div className="d-flex justify-content-between align-items-start mb-3">
                               <div className="bg-primary-subtle p-3 rounded-4"><i className="fa-solid fa-users-rectangle text-primary fs-4"></i></div>
-                              <button className="btn btn-light btn-sm rounded-circle" onClick={(e) => handleDeleteClass(e, cls)}><i className="fa-solid fa-xmark text-muted"></i></button>
+                              <div className="d-flex gap-1">
+                                <button className="btn btn-light btn-sm rounded-circle" onClick={(e) => { e.stopPropagation(); setEditingClass({...cls}); setOriginalMalop(cls.malop); }}><i className="fa-solid fa-pen-to-square text-primary"></i></button>
+                                <button className="btn btn-light btn-sm rounded-circle" onClick={(e) => handleDeleteClass(e, cls.malop)}><i className="fa-solid fa-xmark text-muted"></i></button>
+                              </div>
                             </div>
-                            <h5 className="fw-bold text-dark mb-1">{cls}</h5>
-                            <p className="text-muted small mb-3">Học phần chuyên ngành</p>
+                            <h5 className="fw-bold text-dark mb-1">{cls.malop}</h5>
+                            <h6 className="text-primary fw-bold mb-1">{cls.tenlop}</h6>
+                            <p className="text-muted small mb-3">Khoa: {cls.khoa}</p>
                             <div className="d-flex align-items-center gap-2">
                               <div className="avatar-group d-flex">
                                 {[1,2,3].map(i => <div key={i} className="rounded-circle border border-2 border-white bg-light d-flex align-items-center justify-content-center" style={{ width: '30px', height: '30px', marginLeft: i > 1 ? '-10px' : '0' }}><i className="fa-solid fa-user text-muted" style={{ fontSize: '10px' }}></i></div>)}
                               </div>
-                              <span className="small text-muted fw-bold">+{students.filter(s => s.malop === cls).length} sinh viên</span>
+                              <span className="small text-muted fw-bold">+{students.filter(s => s.malop === cls.malop).length} sinh viên</span>
                             </div>
                           </div>
                         </div>
@@ -518,25 +658,85 @@ useEffect(() => {
                 <div className="card border-0 shadow-sm rounded-4 p-5 mx-auto bg-white" style={{ maxWidth: '600px' }}>
                   <div className="text-center mb-4">
                     <div className="bg-primary-subtle d-inline-block p-4 rounded-circle mb-3"><i className="fa-solid fa-folder-plus text-primary fs-2"></i></div>
-                    <h4 className="fw-bold text-dark">Tạo Lớp Học Phần</h4>
-                    <p className="text-muted">Nhập mã lớp để khởi tạo danh sách sinh viên mới</p>
+                    <h4 className="fw-bold text-dark">Thêm lớp học</h4>
+                    <p className="text-muted">Tạo lớp để quản lý danh sách sinh viên (VD: CNTT01, KTPM01)</p>
+                    {/* <div className="alert alert-info border-0 rounded-3 small text-start mb-3">
+                      <i className="fa-solid fa-lightbulb me-2"></i>
+                      <strong>Lưu ý:</strong> Lớp hành chính khác với môn học. Sinh viên sẽ thuộc về 1 lớp hành chính nhưng có thể học nhiều môn khác nhau.
+                    </div> */}
                   </div>
-                  <div className="mb-4">
-                    <label className="small fw-bold mb-2">Mã lớp học phần</label>
-                    <input type="text" className="form-control form-control-lg bg-light border-0" placeholder="VD: IT6012, KTPM01..." value={newClassName} onChange={e => setNewClassName(e.target.value)} />
-                  </div>
-                  <button className="btn btn-primary w-100 fw-bold py-3 shadow" onClick={async () => { 
-                    if(newClassName){
-                      // Backend hiện tại chưa có API thêm lớp, thông báo cho người dùng
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newClassName.malop || !newClassName.tenlop || !newClassName.khoa) {
+                      Swal.fire('Lỗi', 'Vui lòng điền đầy đủ thông tin!', 'error');
+                      return;
+                    }
+                    try {
+                      const response = await fetch(`${API_URL}/api/themlop`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newClassName)
+                      });
+                      const data = await response.json();
+                      if (data.success) {
+                        await fetchData();
+                        Swal.fire('Thành công', 'Đã tạo lớp học phần mới!', 'success');
+                        setNewClassName({ malop: '', tenlop: '', khoa: '' });
+                        setActiveTab('home');
+                      } else {
+                        Swal.fire('Lỗi', data.error || 'Không thể tạo lớp', 'error');
+                      }
+                    } catch (error) {
                       Swal.fire('Thông báo', 'Tính năng thêm lớp hiện chưa được backend hỗ trợ.', 'info');
-                    } 
-                  }}>Thêm học phần</button>
+                    }
+                  }}>
+                    <div className="row g-3">
+                      <div className="col-12">
+                        <label className="small fw-bold mb-2">Mã lớp hành chính *</label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-0" 
+                          placeholder="VD: CNTT01, KTPM01, QTKD01..." 
+                          value={newClassName.malop || ''} 
+                          onChange={e => setNewClassName({...newClassName, malop: e.target.value})} 
+                          required
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="small fw-bold mb-2">Tên lớp hành chính *</label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-0" 
+                          placeholder="VD: Công nghệ thông tin 01, Kỹ thuật phần mềm 01..." 
+                          value={newClassName.tenlop || ''} 
+                          onChange={e => setNewClassName({...newClassName, tenlop: e.target.value})} 
+                          required
+                        />
+                      </div>
+                      <div className="col-12">
+                        <label className="small fw-bold mb-2">Khoa quản lý *</label>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-0" 
+                          placeholder="VD: Công nghệ thông tin, Kỹ thuật phần mềm..." 
+                          value={newClassName.khoa || ''} 
+                          onChange={e => setNewClassName({...newClassName, khoa: e.target.value})} 
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" className="btn btn-primary w-100 fw-bold py-3 shadow mt-4">Thêm lớp học</button>
+                  </form>
                 </div>
               )}
 
               {activeTab === 'add_student' && (
                 <div className="card border-0 shadow-sm rounded-4 p-5 mx-auto bg-white" style={{ maxWidth: '800px' }}>
-                  <h4 className="fw-bold mb-4 text-center text-primary">Thêm Sinh viên</h4>
+                  <h4 className="fw-bold mb-4 text-center text-primary">Thêm Sinh viên vào Lớp</h4>
+                  {/* <div className="alert alert-info border-0 rounded-3 small mb-4">
+                    <i className="fa-solid fa-info-circle me-2"></i>
+                    <strong>Hướng dẫn:</strong> Sinh viên sẽ được thêm vào lớp hành chính. Việc đăng ký môn học và nhập điểm sẽ thực hiện sau.
+                  </div> */}
                   <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
                     <label className="fw-bold text-primary d-block mb-2">Import từ Excel</label>
                     <input type="file" className="form-control" accept=".xlsx, .xls" onChange={handleImportStudentsExcel} />
@@ -571,9 +771,12 @@ useEffect(() => {
                       <div className="col-md-6"><label className="small fw-bold">Ngày sinh *</label><input type="date" className="form-control" required value={formData.ngaysinh} onChange={e => setFormData({...formData, ngaysinh: e.target.value})} /></div>
                       <div className="col-md-6"><label className="small fw-bold">Giới tính *</label><select className="form-select" required value={formData.gioitinh} onChange={e => setFormData({...formData, gioitinh: e.target.value})}><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
                       <div className="col-12">
-                        <label className="small fw-bold">Phân vào lớp học *</label>
+                        <label className="small fw-bold">Phân vào lớp hành chính *</label>
                         <select className="form-select" value={formData.malop} required onChange={e => setFormData({...formData, malop: e.target.value})}>
-                          <option value="">-- Chọn lớp học --</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}
+                          <option value="">-- Chọn lớp hành chính --</option>
+                          {classes.map(c => (
+                            <option key={c.malop} value={c.malop}>{c.malop} - {c.tenlop}</option>
+                          ))}
                         </select>
                       </div>
                       <div className="col-12 mt-4"><button className="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow">Lưu vào danh sách</button></div>
@@ -584,7 +787,11 @@ useEffect(() => {
 
               {activeTab === 'grades' && (
                 <div className="card border-0 shadow-sm rounded-4 p-5 mx-auto bg-white" style={{ maxWidth: '800px' }}>
-                  <h4 className="fw-bold mb-4 text-center text-primary">Quản lý Điểm số</h4>
+                  <h4 className="fw-bold mb-4 text-center text-primary">Quản lý Điểm Môn Học</h4>
+                  {/* <div className="alert alert-warning border-0 rounded-3 small mb-4">
+                    <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                    <strong>Lưu ý:</strong> Chức năng này để nhập điểm cho từng môn học cụ thể. Trước tiên cần chọn lớp hành chính, sau đó chọn môn học và sinh viên.
+                  </div> */}
                   <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
                     <label className="fw-bold text-primary d-block mb-2">Import điểm từ Excel</label>
                     <input type="file" className="form-control" accept=".xlsx, .xls" onChange={handleImportGradesExcel} disabled={classes.length === 0} />
@@ -602,8 +809,8 @@ useEffect(() => {
                         body: JSON.stringify({
                           masv: gradeData.masv,
                           mamon: gradeData.mamon,
-                          hocky: 1,
-                          namhoc: '2023-2024',
+                          hocky: gradeData.hocky,
+                          namhoc: gradeData.namhoc,
                           diemqt: gradeData.diemqt,
                           diemthi: gradeData.diemthi
                         })
@@ -612,6 +819,7 @@ useEffect(() => {
                       if (data.success) {
                         fetchData();
                         Swal.fire('Thành công', 'Đã lưu điểm sinh viên!', 'success');
+                        setGradeData({ masv: '', mamon: 'CSDL', hocky: 1, namhoc: '2024-2025', diemqt: '', diemthi: '' });
                       } else {
                         Swal.fire('Lỗi', data.error || 'Không thể lưu điểm', 'error');
                       }
@@ -620,10 +828,38 @@ useEffect(() => {
                     }
                   }}>
                     <div className="mb-3">
-                      <label className="small fw-bold">Chọn lớp</label>
+                      <label className="small fw-bold">Chọn lớp hành chính</label>
                       <select className="form-select" required value={gradeClassFilter} onChange={e => {setGradeClassFilter(e.target.value); setGradeData({...gradeData, masv: ''});}}>
-                        <option value="">-- Chọn lớp --</option>
-                        {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value="">-- Chọn lớp hành chính --</option>
+                        {classes.map(c => (
+                          <option key={c.malop} value={c.malop}>{c.malop} - {c.tenlop}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6">
+                        <label className="small fw-bold">Môn học</label>
+                        <select className="form-select" value={gradeData.mamon} onChange={e => setGradeData({...gradeData, mamon: e.target.value})}>
+                          <option value="CSDL">Cơ sở dữ liệu</option>
+                          <option value="LTW">Lập trình web</option>
+                          <option value="CTDL">Cấu trúc dữ liệu</option>
+                        </select>
+                      </div>
+                      <div className="col-md-6">
+                        <label className="small fw-bold">Học kỳ</label>
+                        <select className="form-select" value={gradeData.hocky} onChange={e => setGradeData({...gradeData, hocky: parseInt(e.target.value)})}>
+                          <option value={1}>Học kỳ 1</option>
+                          <option value={2}>Học kỳ 2</option>
+                          <option value={3}>Học kỳ hè</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="small fw-bold">Năm học</label>
+                      <select className="form-select" value={gradeData.namhoc} onChange={e => setGradeData({...gradeData, namhoc: e.target.value})}>
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2023-2024">2023-2024</option>
+                        <option value="2022-2023">2022-2023</option>
                       </select>
                     </div>
                     <div className="mb-3">
@@ -748,13 +984,15 @@ useEffect(() => {
       {editingStudent && (
         <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
           <div className="card shadow-lg border-0 p-4" style={{ width: '500px', borderRadius: '20px' }}>
-            <h5 className="fw-bold mb-4">Chỉnh sửa thông tin</h5>
+            <h5 className="fw-bold mb-4">Chỉnh sửa thông tin sinh viên</h5>
             <form onSubmit={handleQuickEditGrade}>
               <div className="row g-3">
                 <div className="col-12"><label className="small fw-bold">Họ tên *</label><input type="text" className="form-control py-2" required value={editingStudent.hoten} onChange={e => setEditingStudent({...editingStudent, hoten: e.target.value})} /></div>
                 <div className="col-6"><label className="small fw-bold">MSSV *</label><input type="text" className="form-control py-2" required disabled value={editingStudent.masv} /></div>
                 <div className="col-6"><label className="small fw-bold">Lớp *</label>
-                  <select className="form-select py-2" required value={editingStudent.malop} onChange={e => setEditingStudent({...editingStudent, malop: e.target.value})}>{classes.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                  <select className="form-select py-2" required value={editingStudent.malop} onChange={e => setEditingStudent({...editingStudent, malop: e.target.value})}>
+                    {classes.map(c => <option key={c.malop} value={c.malop}>{c.malop}</option>)}
+                  </select>
                 </div>
                 <div className="col-6"><label className="small fw-bold">Ngày sinh *</label><input type="date" className="form-control py-2" required value={editingStudent.ngaysinh} onChange={e => setEditingStudent({...editingStudent, ngaysinh: e.target.value})} /></div>
                 <div className="col-6"><label className="small fw-bold">Giới tính *</label>
@@ -765,6 +1003,52 @@ useEffect(() => {
               </div>
               <div className="mt-4 d-flex gap-2 pt-3">
                 <button type="button" className="btn btn-light w-100 fw-bold py-2" onClick={() => {setEditingStudent(null); setOriginalMasv(null);}}>Hủy</button>
+                <button type="submit" className="btn btn-primary w-100 fw-bold py-2">Lưu thay đổi</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingClass && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1051 }}>
+          <div className="card shadow-lg border-0 p-4" style={{ width: '500px', borderRadius: '20px' }}>
+            <h5 className="fw-bold mb-4">Chỉnh sửa thông tin lớp học</h5>
+            <form onSubmit={handleEditClass}>
+              <div className="row g-3">
+                <div className="col-12">
+                  <label className="small fw-bold">Mã lớp *</label>
+                  <input 
+                    type="text" 
+                    className="form-control py-2" 
+                    required 
+                    value={editingClass.malop} 
+                    onChange={e => setEditingClass({...editingClass, malop: e.target.value})} 
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="small fw-bold">Tên lớp *</label>
+                  <input 
+                    type="text" 
+                    className="form-control py-2" 
+                    required 
+                    value={editingClass.tenlop} 
+                    onChange={e => setEditingClass({...editingClass, tenlop: e.target.value})} 
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="small fw-bold">Khoa *</label>
+                  <input 
+                    type="text" 
+                    className="form-control py-2" 
+                    required 
+                    value={editingClass.khoa} 
+                    onChange={e => setEditingClass({...editingClass, khoa: e.target.value})} 
+                  />
+                </div>
+              </div>
+              <div className="mt-4 d-flex gap-2 pt-3">
+                <button type="button" className="btn btn-light w-100 fw-bold py-2" onClick={() => {setEditingClass(null); setOriginalMalop(null);}}>Hủy</button>
                 <button type="submit" className="btn btn-primary w-100 fw-bold py-2">Lưu thay đổi</button>
               </div>
             </form>
