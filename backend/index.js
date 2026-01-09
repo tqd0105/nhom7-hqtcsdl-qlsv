@@ -217,7 +217,7 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
       }
 
       // Nếu đổi mã lớp, sử dụng mã tạm thời để tránh foreign key constraint
-      const tempMalop = `TEMP_${Date.now()}`;
+      const tempMalop = `TMP${Math.floor(Math.random() * 9999)}`;
       
       // 1. Tạo lớp tạm thời
       await pool.query(
