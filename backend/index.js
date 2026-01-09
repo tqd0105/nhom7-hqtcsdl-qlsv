@@ -215,21 +215,52 @@ app.put("/api/capnhatlop/:malop", async (req, res) => {
           error: "Mã lớp mới đã tồn tại" 
         });
       }
-    }
 
-    // Cập nhật thông tin lớp trước
-    await pool.query(
-      `UPDATE lop 
-       SET malop = $1, tenlop = $2, khoa = $3 
-       WHERE malop = $4`,
-      [malop, tenlop, khoa, currentMalop]
-    );
-
-    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên
-    if (malop !== currentMalop) {
+      // Nếu đổi mã lớp, sử dụng mã tạm thời để tránh foreign key constraint
+      const tempMalop = `TEMP_${Date.now()}`;
+      
+      // 1. Tạo lớp tạm thời
+      await pool.query(
+        "INSERT INTO lop (malop, tenlop, khoa) VALUES ($1, $2, $3)",
+        [tempMalop, 'TEMP', 'TEMP']
+      );
+      
+      // 2. Chuyển sinh viên sang lớp tạm thời
       await pool.query(
         "UPDATE sinhvien SET malop = $1 WHERE malop = $2",
-        [malop, currentMalop]
+        [tempMalop, currentMalop]
+      );
+      
+      // 3. Xóa lớp cũ
+      await pool.query(
+        "DELETE FROM lop WHERE malop = $1",
+        [currentMalop]
+      );
+      
+      // 4. Tạo lớp mới
+      await pool.query(
+        "INSERT INTO lop (malop, tenlop, khoa) VALUES ($1, $2, $3)",
+        [malop, tenlop, khoa]
+      );
+      
+      // 5. Chuyển sinh viên sang lớp mới
+      await pool.query(
+        "UPDATE sinhvien SET malop = $1 WHERE malop = $2",
+        [malop, tempMalop]
+      );
+      
+      // 6. Xóa lớp tạm thời
+      await pool.query(
+        "DELETE FROM lop WHERE malop = $1",
+        [tempMalop]
+      );
+    } else {
+      // Chỉ cập nhật tên lớp và khoa nếu không đổi mã
+      await pool.query(
+        `UPDATE lop 
+         SET tenlop = $1, khoa = $2 
+         WHERE malop = $3`,
+        [tenlop, khoa, currentMalop]
       );
     }
 
