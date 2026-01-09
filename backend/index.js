@@ -171,6 +171,85 @@ app.put("/api/capnhatsinhvien/:masv", async (req, res) => {
   }
 });
 
+// PUT - Cập nhật thông tin lớp học
+app.put("/api/capnhatlop/:malop", async (req, res) => {
+  const { malop: currentMalop } = req.params;
+  const { malop, tenlop, khoa } = req.body;
+
+  if (!malop || !tenlop || !khoa) {
+    return res.status(400).json({ 
+      success: false,
+      error: "Thiếu thông tin bắt buộc. Cần có: malop, tenlop, khoa" 
+    });
+  }
+
+  try {
+    // Kiểm tra lớp hiện tại có tồn tại không
+    const checkResult = await pool.query(
+      "SELECT malop FROM lop WHERE malop = $1",
+      [currentMalop]
+    );
+
+    if (checkResult.rowCount === 0) {
+      return res.status(404).json({ 
+        success: false,
+        error: "Lớp học không tồn tại" 
+      });
+    }
+
+    // Nếu mã lớp thay đổi, kiểm tra mã mới có trùng không
+    if (malop !== currentMalop) {
+      const duplicateCheck = await pool.query(
+        "SELECT malop FROM lop WHERE malop = $1",
+        [malop]
+      );
+
+      if (duplicateCheck.rowCount > 0) {
+        return res.status(400).json({ 
+          success: false,
+          error: "Mã lớp mới đã tồn tại" 
+        });
+      }
+    }
+
+    // Cập nhật thông tin lớp
+    await pool.query(
+      `UPDATE lop 
+       SET malop = $1, tenlop = $2, khoa = $3 
+       WHERE malop = $4`,
+      [malop, tenlop, khoa, currentMalop]
+    );
+
+    // Nếu mã lớp thay đổi, cập nhật bảng sinh viên
+    if (malop !== currentMalop) {
+      await pool.query(
+        "UPDATE sinhvien SET malop = $1 WHERE malop = $2",
+        [malop, currentMalop]
+      );
+    }
+    
+    res.json({ 
+      success: true,
+      message: `Cập nhật lớp ${malop} thành công`,
+      data: { malop, tenlop, khoa }
+    });
+  } catch (error) {
+    console.error("Lỗi cập nhật lớp:", error);
+    
+    if (error.code === '23505') {
+      return res.status(400).json({ 
+        success: false,
+        error: "Mã lớp đã tồn tại" 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: "Không thể cập nhật lớp học" 
+    });
+  }
+});
+
 // DELETE - Xóa sinh viên (sử dụng stored procedure)
 app.delete("/api/xoasinhvien/:masv", async (req, res) => {
   const { masv } = req.params;
