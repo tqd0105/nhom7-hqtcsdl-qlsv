@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
+// POST - Đăng ký user
+const bcrypt = require('bcrypt');
 require("dotenv").config();
 
 const app = express();
@@ -33,6 +35,27 @@ app.get("/api/xinchao", (req, res) => {
   res.json({ message: "Xin chào từ Express backend" });
 });
 
+
+// 1. Lấy danh sách người dùng (Chỉ dành cho Admin)
+app.get('/api/users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT userid, username, role, created_at FROM users ORDER BY created_at DESC');
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Xóa người dùng
+app.delete('/api/users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM users WHERE userid = $1', [id]);
+        res.json({ success: true, message: 'Xóa tài khoản thành công' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 // GET - Lấy danh sách tất cả sinh viên
 app.get("/api/sinhvien", async (req, res) => {
   try {
@@ -499,6 +522,108 @@ app.post("/api/dangkymon", async (req, res) => {
   }
 });
 
+// POST - Đăng ký user
+app.post("/api/register", async (req, res) => {
+  const { username, password, role } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      error: "Thiếu username hoặc password"
+    });
+  }
+
+  try {
+    // Check trùng username
+    const check = await pool.query(
+      "SELECT 1 FROM users WHERE username = $1",
+      [username]
+    );
+
+    if (check.rowCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Username đã tồn tại"
+      });
+    }
+
+    // HASH password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `INSERT INTO users (username, password, role)
+       VALUES ($1, $2, $3)
+       RETURNING userid, username, role`,
+      [username, hashedPassword, role || 'user']
+    );
+
+    res.status(201).json({
+      success: true,
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Lỗi đăng ký:", error);
+    res.status(500).json({
+      success: false,
+      error: "Không thể đăng ký user"
+    });
+  }
+});
+// POST - Đăng nhập
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({
+      success: false,
+      error: "Thiếu username hoặc password"
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT userid, username, password, role FROM users WHERE username = $1",
+      [username]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({
+        success: false,
+        error: "Sai tài khoản hoặc mật khẩu"
+      });
+    }
+
+    const user = result.rows[0];
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: "Sai tài khoản hoặc mật khẩu"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        userid: user.userid,
+        username: user.username,
+        role: user.role
+      }
+    });
+
+  } catch (error) {
+    console.error("Lỗi đăng nhập:", error);
+    res.status(500).json({
+      success: false,
+      error: "Không thể đăng nhập"
+    });
+  }
+});
+
+
 // GET - Lấy điểm của sinh viên
 app.get("/api/diem/:masv", async (req, res) => {
   const { masv } = req.params;
@@ -534,6 +659,9 @@ app.get("/api/diem/:masv", async (req, res) => {
     });
   }
 });
+app.get("/api/hello", (req, res) => {
+  res.json({ message: "Hello from Express backend" });
+});
 
 // Xử lý lỗi 404
 app.use((req, res) => {
@@ -552,13 +680,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend đang chạy tại http://localhost:${PORT}`);
-});
-app.get("/api/hello", (req, res) => {
-  res.json({ message: "Hello from Express backend " });
-});
-  
+
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
 });
