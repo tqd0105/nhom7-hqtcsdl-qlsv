@@ -195,19 +195,50 @@ useEffect(() => {
 
   const handleDeleteClass = async (e, className) => {
     e.stopPropagation();
+    
+    // Đếm số sinh viên trong lớp
+    const studentsInClass = students.filter(s => s.malop === className).length;
+    
+    const warningText = studentsInClass > 0 
+      ? `Bạn có chắc chắn muốn thực hiện việc xóa lớp "${className}"? \n ⚠️CẢNH BÁO: Việc này sẽ xóa luôn ${studentsInClass} sinh viên trong lớp và toàn bộ điểm số của họ!`
+      : `Bạn có chắc chắn muốn xóa lớp "${className}"?`;
+    
     Swal.fire({
-      title: 'Xác nhận xóa?',
-      text: `Bạn có chắc chắn muốn xóa lớp "${className}" và toàn bộ sinh viên trong lớp này?`,
-      icon: 'warning',
+      title: 'Xác nhận xóa lớp?',
+      text: warningText,
+      icon: studentsInClass > 0 ? 'warning' : 'question',
       showCancelButton: true,
-      confirmButtonColor: '#4f46e5',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Đồng ý xóa',
-      cancelButtonText: 'Hủy'
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: studentsInClass > 0 ? `Đồng ý xóa (${studentsInClass} sinh viên)` : 'Đồng ý xóa',
+      cancelButtonText: 'Hủy',
+      customClass: {
+        popup: 'swal-wide'
+      }
     }).then(async (result) => {
       if (result.isConfirmed) {
-        // Backend hiện tại chưa có API xóa lớp, thông báo cho người dùng
-        Swal.fire('Thông báo', 'Tính năng xóa lớp hiện chưa được backend hỗ trợ.', 'info');
+        try {
+          const response = await fetch(`${API_URL}/api/xoalop/${className}`, {
+            method: 'DELETE'
+          });
+          const data = await response.json();
+          
+          if (data.success) {
+            await fetchData(); // Refresh dữ liệu
+            const successMessage = data.deletedStudents > 0 
+              ? `Đã xóa lớp ${className} và ${data.deletedStudents} sinh viên!`
+              : `Đã xóa lớp ${className}!`;
+            Swal.fire('Thành công', successMessage, 'success');
+            if (selectedClass === className) {
+              setSelectedClass(null); // Reset selected class nếu đang xem lớp bị xóa
+            }
+          } else {
+            Swal.fire('Lỗi', data.error || 'Không thể xóa lớp', 'error');
+          }
+        } catch (error) {
+          console.error('Lỗi xóa lớp:', error);
+          Swal.fire('Lỗi', 'Có lỗi xảy ra khi xóa lớp học!', 'error');
+        }
       }
     });
   };
@@ -502,7 +533,7 @@ useEffect(() => {
         <div className="container-fluid px-4">
           <div className="d-flex justify-content-between align-items-center w-100">
             <span className="navbar-brand fw-bold fs-4 text-primary m-0" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('home')}>
-              <i className="fa-solid fa-graduation-cap me-2"></i>EDU-MANAGER {currentUser?.isAdmin && <span className="badge bg-danger ms-2 fs-6">ADMIN</span>}
+              <i className="fa-solid fa-graduation-cap me-2"></i>UTH {currentUser?.isAdmin && <span className="badge bg-danger ms-2 fs-6">ADMIN</span>}
             </span>
             <div className="d-flex align-items-center gap-2">
               {isLoggedIn ? (
@@ -680,14 +711,15 @@ useEffect(() => {
                       const data = await response.json();
                       if (data.success) {
                         await fetchData();
-                        Swal.fire('Thành công', 'Đã tạo lớp học phần mới!', 'success');
+                        Swal.fire('Thành công', 'Đã tạo lớp học mới!', 'success');
                         setNewClassName({ malop: '', tenlop: '', khoa: '' });
                         setActiveTab('home');
                       } else {
                         Swal.fire('Lỗi', data.error || 'Không thể tạo lớp', 'error');
                       }
                     } catch (error) {
-                      Swal.fire('Thông báo', 'Tính năng thêm lớp hiện chưa được backend hỗ trợ.', 'info');
+                      console.error('Lỗi thêm lớp:', error);
+                      Swal.fire('Lỗi', 'Có lỗi xảy ra khi thêm lớp học!', 'error');
                     }
                   }}>
                     <div className="row g-3">
@@ -737,10 +769,10 @@ useEffect(() => {
                     <i className="fa-solid fa-info-circle me-2"></i>
                     <strong>Hướng dẫn:</strong> Sinh viên sẽ được thêm vào lớp hành chính. Việc đăng ký môn học và nhập điểm sẽ thực hiện sau.
                   </div> */}
-                  <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
+                  {/* <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
                     <label className="fw-bold text-primary d-block mb-2">Import từ Excel</label>
                     <input type="file" className="form-control" accept=".xlsx, .xls" onChange={handleImportStudentsExcel} />
-                  </div>
+                  </div> */}
                   <form onSubmit={async (e) => { 
                     e.preventDefault(); 
                     if (!formData.masv || !formData.hoten || !formData.ngaysinh || !formData.malop) {
@@ -792,10 +824,10 @@ useEffect(() => {
                     <i className="fa-solid fa-exclamation-triangle me-2"></i>
                     <strong>Lưu ý:</strong> Chức năng này để nhập điểm cho từng môn học cụ thể. Trước tiên cần chọn lớp hành chính, sau đó chọn môn học và sinh viên.
                   </div> */}
-                  <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
+                  {/* <div className="p-4 mb-4 border border-dashed rounded-4 bg-light text-center border-primary">
                     <label className="fw-bold text-primary d-block mb-2">Import điểm từ Excel</label>
                     <input type="file" className="form-control" accept=".xlsx, .xls" onChange={handleImportGradesExcel} disabled={classes.length === 0} />
-                  </div>
+                  </div> */}
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     if (!gradeData.masv) {

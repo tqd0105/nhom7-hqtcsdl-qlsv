@@ -89,6 +89,67 @@ $$ LANGUAGE plpgsql;
 -- PROCEDURES
 -- ============================================
 
+CREATE OR REPLACE PROCEDURE them_lop(
+    p_malop VARCHAR,
+    p_tenlop VARCHAR,
+    p_khoa VARCHAR
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Kiểm tra mã lớp đã tồn tại
+    IF EXISTS (SELECT 1 FROM lop WHERE malop = p_malop) THEN
+        RAISE EXCEPTION 'Mã lớp % đã tồn tại', p_malop;
+    END IF;
+    
+    -- Kiểm tra tham số đầu vào
+    IF p_malop IS NULL OR p_malop = '' THEN
+        RAISE EXCEPTION 'Mã lớp không được để trống';
+    END IF;
+    
+    IF p_tenlop IS NULL OR p_tenlop = '' THEN
+        RAISE EXCEPTION 'Tên lớp không được để trống';
+    END IF;
+    
+    IF p_khoa IS NULL OR p_khoa = '' THEN
+        RAISE EXCEPTION 'Khoa không được để trống';
+    END IF;
+
+    -- Thêm lớp học
+    INSERT INTO lop (malop, tenlop, khoa)
+    VALUES (p_malop, p_tenlop, p_khoa);
+    
+    RAISE NOTICE 'Thêm lớp % (%): % thành công', p_malop, p_tenlop, p_khoa;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE xoa_lop(p_malop VARCHAR)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    sv_count INTEGER;
+BEGIN
+    -- Kiểm tra lớp tồn tại
+    IF NOT EXISTS (SELECT 1 FROM lop WHERE malop = p_malop) THEN
+        RAISE EXCEPTION 'Lớp % không tồn tại', p_malop;
+    END IF;
+    
+    -- Đếm số sinh viên trong lớp
+    SELECT COUNT(*) INTO sv_count FROM sinhvien WHERE malop = p_malop;
+    
+    -- Xóa sinh viên trước (CASCADE sẽ tự động xóa điểm và đăng ký)
+    IF sv_count > 0 THEN
+        DELETE FROM sinhvien WHERE malop = p_malop;
+        RAISE NOTICE 'Đã xóa % sinh viên thuộc lớp %', sv_count, p_malop;
+    END IF;
+    
+    -- Xóa lớp học
+    DELETE FROM lop WHERE malop = p_malop;
+    
+    RAISE NOTICE 'Xóa lớp % thành công', p_malop;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE them_sinhvien(
     p_masv VARCHAR,
     p_hoten VARCHAR,
@@ -426,10 +487,13 @@ CREATE INDEX idx_diem_mamon ON diem(mamon);
 -- SAMPLE DATA (Dữ liệu mẫu để test)
 -- ============================================
 
--- Thêm lớp
-INSERT INTO lop VALUES 
-('CNTT01', 'Công nghệ thông tin 1', 'Công nghệ thông tin'),
-('KTPM01', 'Kỹ thuật phần mềm 1', 'Công nghệ thông tin');
+-- Thêm lớp qua procedure
+CALL them_lop('CNTT01', 'Công nghệ thông tin 1', 'Công nghệ thông tin');
+CALL them_lop('KTPM01', 'Kỹ thuật phần mềm 1', 'Công nghệ thông tin');
+CALL them_lop('QTKD01', 'Quản trị kinh doanh 1', 'Kinh tế');
+
+-- Ví dụ xóa lớp (chỉ có thể xóa lớp không có sinh viên)
+-- CALL xoa_lop('QTKD01'); -- Xóa lớp QTKD01 nếu không có sinh viên
 
 -- Thêm môn học
 INSERT INTO monhoc VALUES 

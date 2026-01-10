@@ -592,6 +592,99 @@ app.get("/api/lop", async (req, res) => {
   }
 });
 
+// POST - Thêm lớp học mới (sử dụng stored procedure)
+app.post("/api/themlop", async (req, res) => {
+  const { malop, tenlop, khoa } = req.body;
+
+  if (!malop || !tenlop || !khoa) {
+    return res.status(400).json({ 
+      success: false,
+      error: "Thiếu thông tin bắt buộc. Cần có: malop, tenlop, khoa" 
+    });
+  }
+
+  try {
+    await pool.query(
+      "CALL them_lop($1, $2, $3)",
+      [malop, tenlop, khoa]
+    );
+    
+    res.status(201).json({ 
+      success: true,
+      message: `Thêm lớp ${malop} thành công`,
+      data: { malop, tenlop, khoa }
+    });
+  } catch (error) {
+    console.error("Lỗi thêm lớp:", error);
+    
+    if (error.message.includes("đã tồn tại")) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Mã lớp đã tồn tại" 
+      });
+    }
+    if (error.message.includes("không được để trống")) {
+      return res.status(400).json({ 
+        success: false,
+        error: error.message 
+      });
+    }
+    if (error.code === '23505') {
+      return res.status(400).json({ 
+        success: false,
+        error: "Mã lớp đã tồn tại" 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: "Không thể thêm lớp học" 
+    });
+  }
+});
+
+// DELETE - Xóa lớp học (sử dụng stored procedure)
+app.delete("/api/xoalop/:malop", async (req, res) => {
+  const { malop } = req.params;
+
+  try {
+    // Kiểm tra số sinh viên trong lớp trước khi xóa
+    const studentCountResult = await pool.query(
+      "SELECT COUNT(*) as count FROM sinhvien WHERE malop = $1",
+      [malop]
+    );
+    const studentCount = parseInt(studentCountResult.rows[0].count);
+
+    // Gọi stored procedure xóa lớp
+    await pool.query(
+      "CALL xoa_lop($1)",
+      [malop]
+    );
+    
+    res.json({ 
+      success: true,
+      message: studentCount > 0 
+        ? `Xóa lớp ${malop} và ${studentCount} sinh viên thành công`
+        : `Xóa lớp ${malop} thành công`,
+      deletedStudents: studentCount
+    });
+  } catch (error) {
+    console.error("Lỗi xóa lớp:", error);
+    
+    if (error.message.includes("không tồn tại")) {
+      return res.status(404).json({ 
+        success: false,
+        error: "Lớp học không tồn tại" 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: "Không thể xóa lớp học" 
+    });
+  }
+});
+
 // GET - Lấy danh sách môn học
 app.get("/api/monhoc", async (req, res) => {
   try {
