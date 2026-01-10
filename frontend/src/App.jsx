@@ -636,7 +636,7 @@ useEffect(() => {
                             <p className="text-muted small mb-3">Khoa: {cls.khoa}</p>
                             <div className="d-flex align-items-center gap-2">
                               <div className="avatar-group d-flex">
-                                {[1,2,3].map(i => <div key={i} className="rounded-circle border border-2 border-white bg-light d-flex align-items-center justify-content-center" style={{ width: '30px', height: '30px', marginLeft: i > 1 ? '-10px' : '0' }}><i className="fa-solid fa-user text-muted" style={{ fontSize: '10px' }}></i></div>)}
+                                {[1].map(i => <div key={i} className="rounded-circle border border-2 border-white bg-light d-flex align-items-center justify-content-center" style={{ width: '30px', height: '30px', marginLeft: i > 1 ? '-10px' : '0' }}><i className="fa-solid fa-user text-muted" style={{ fontSize: '10px' }}></i></div>)}
                               </div>
                               <span className="small text-muted fw-bold">+{students.filter(s => s.malop === cls.malop).length} sinh viên</span>
                             </div>
@@ -771,9 +771,9 @@ useEffect(() => {
                       <div className="col-md-6"><label className="small fw-bold">Ngày sinh *</label><input type="date" className="form-control" required value={formData.ngaysinh} onChange={e => setFormData({...formData, ngaysinh: e.target.value})} /></div>
                       <div className="col-md-6"><label className="small fw-bold">Giới tính *</label><select className="form-select" required value={formData.gioitinh} onChange={e => setFormData({...formData, gioitinh: e.target.value})}><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
                       <div className="col-12">
-                        <label className="small fw-bold">Phân vào lớp hành chính *</label>
+                        <label className="small fw-bold">Phân vào lớp  *</label>
                         <select className="form-select" value={formData.malop} required onChange={e => setFormData({...formData, malop: e.target.value})}>
-                          <option value="">-- Chọn lớp hành chính --</option>
+                          <option value="">-- Chọn lớp  --</option>
                           {classes.map(c => (
                             <option key={c.malop} value={c.malop}>{c.malop} - {c.tenlop}</option>
                           ))}
@@ -828,9 +828,9 @@ useEffect(() => {
                     }
                   }}>
                     <div className="mb-3">
-                      <label className="small fw-bold">Chọn lớp hành chính</label>
+                      <label className="small fw-bold">Chọn lớp </label>
                       <select className="form-select" required value={gradeClassFilter} onChange={e => {setGradeClassFilter(e.target.value); setGradeData({...gradeData, masv: ''});}}>
-                        <option value="">-- Chọn lớp hành chính --</option>
+                        <option value="">-- Chọn lớp  --</option>
                         {classes.map(c => (
                           <option key={c.malop} value={c.malop}>{c.malop} - {c.tenlop}</option>
                         ))}
