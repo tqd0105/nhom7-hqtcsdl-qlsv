@@ -68,7 +68,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 CREATE OR REPLACE FUNCTION check_tuoi(ns DATE)
 RETURNS BOOLEAN AS $$
 BEGIN
-    RETURN DATE_PART('year', AGE(ns)) >= 16;
+    RETURN DATE_PART('year', AGE(ns)) >= 18;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
@@ -162,7 +162,7 @@ AS $$
 BEGIN
     -- Kiểm tra tuổi
     IF NOT check_tuoi(p_ngaysinh) THEN
-        RAISE EXCEPTION 'Sinh viên phải đủ 16 tuổi trở lên';
+        RAISE EXCEPTION 'Sinh viên phải đủ 18 tuổi trở lên';
     END IF;
     
     -- Kiểm tra lớp tồn tại
@@ -195,7 +195,7 @@ BEGIN
     
     -- Kiểm tra tuổi nếu cập nhật ngày sinh
     IF p_ngaysinh IS NOT NULL AND NOT check_tuoi(p_ngaysinh) THEN
-        RAISE EXCEPTION 'Sinh viên phải đủ 16 tuổi trở lên';
+        RAISE EXCEPTION 'Sinh viên phải đủ 18 tuổi trở lên';
     END IF;
     
     -- Kiểm tra lớp tồn tại nếu cập nhật lớp
@@ -433,7 +433,7 @@ CREATE OR REPLACE FUNCTION trg_kiem_tra_tuoi()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NOT check_tuoi(NEW.ngaysinh) THEN
-        RAISE EXCEPTION 'Sinh viên phải đủ 16 tuổi trở lên';
+        RAISE EXCEPTION 'Sinh viên phải đủ 18 tuổi trở lên';
     END IF;
     RETURN NEW;
 END;

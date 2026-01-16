@@ -26,6 +26,7 @@ function App() {
   const [originalMasv, setOriginalMasv] = useState(null);
   const [editingClass, setEditingClass] = useState(null);
   const [originalMalop, setOriginalMalop] = useState(null);
+  const [ageCheckResult, setAgeCheckResult] = useState(null); // Kết quả kiểm tra tuổi
 
   // Khôi phục trạng thái đăng nhập từ localStorage khi component mount
   useEffect(() => {
@@ -533,7 +534,7 @@ useEffect(() => {
         <div className="container-fluid px-4">
           <div className="d-flex justify-content-between align-items-center w-100">
             <span className="navbar-brand fw-bold fs-4 text-primary m-0" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('home')}>
-              <i className="fa-solid fa-graduation-cap me-2"></i>UTH {currentUser?.isAdmin && <span className="badge bg-danger ms-2 fs-6">ADMIN</span>}
+              <img className='rounded-circle me-2' src="uth.png" width={40} alt="" />UTH {currentUser?.isAdmin && <span className="badge bg-danger ms-2 fs-6">ADMIN</span>}
             </span>
             <div className="d-flex align-items-center gap-2">
               {isLoggedIn ? (
@@ -779,6 +780,11 @@ useEffect(() => {
                         Swal.fire('Lỗi', 'Vui lòng điền đầy đủ các thông tin bắt buộc!', 'error');
                         return;
                     }
+                    // Kiểm tra tuổi trước khi submit
+                    if (ageCheckResult && !ageCheckResult.du_tuoi) {
+                        Swal.fire('Lỗi', `Sinh viên phải đủ 18 tuổi trở lên! (Hiện tại: ${ageCheckResult.tuoi} tuổi)`, 'error');
+                        return;
+                    }
                     try {
                       const response = await fetch(`${API_URL}/api/themsinhvien`, {
                         method: 'POST',
@@ -790,6 +796,7 @@ useEffect(() => {
                         fetchData();
                         Swal.fire('Thành công', 'Đã thêm sinh viên vào danh sách!', 'success');
                         setFormData({ masv: '', hoten: '', ngaysinh: '', gioitinh: 'Nam', malop: '' });
+                        setAgeCheckResult(null); // Reset kết quả kiểm tra tuổi
                       } else {
                         Swal.fire('Lỗi', data.error || 'Không thể thêm sinh viên', 'error');
                       }
@@ -800,7 +807,45 @@ useEffect(() => {
                     <div className="row g-3">
                       <div className="col-md-6"><label className="small fw-bold">Họ tên *</label><input type="text" className="form-control" required value={formData.hoten} onChange={e => setFormData({...formData, hoten: e.target.value})} /></div>
                       <div className="col-md-6"><label className="small fw-bold">MSSV *</label><input type="text" className="form-control" required value={formData.masv} onChange={e => setFormData({...formData, masv: e.target.value})} /></div>
-                      <div className="col-md-6"><label className="small fw-bold">Ngày sinh *</label><input type="date" className="form-control" required value={formData.ngaysinh} onChange={e => setFormData({...formData, ngaysinh: e.target.value})} /></div>
+                      <div className="col-md-6">
+                        <label className="small fw-bold">Ngày sinh *</label>
+                        <input 
+                          type="date" 
+                          className={`form-control ${ageCheckResult !== null ? (ageCheckResult.du_tuoi ? 'is-valid' : 'is-invalid') : ''}`}
+                          required 
+                          value={formData.ngaysinh} 
+                          onChange={async (e) => {
+                            const newDate = e.target.value;
+                            setFormData({...formData, ngaysinh: newDate});
+                            
+                            // Kiểm tra tuổi qua API
+                            if (newDate) {
+                              try {
+                                const response = await fetch(`${API_URL}/api/kiemtra/tuoi?ngaysinh=${newDate}`);
+                                const data = await response.json();
+                                if (data.success) {
+                                  // Tính tuổi để hiển thị
+                                  const birthDate = new Date(newDate);
+                                  const today = new Date();
+                                  const age = today.getFullYear() - birthDate.getFullYear();
+                                  setAgeCheckResult({ ...data.data, tuoi: age });
+                                }
+                              } catch (error) {
+                                console.error('Lỗi kiểm tra tuổi:', error);
+                              }
+                            } else {
+                              setAgeCheckResult(null);
+                            }
+                          }}
+                        />
+                        {ageCheckResult && (
+                          <div className={`small mt-1 ${ageCheckResult.du_tuoi ? 'text-success' : 'text-danger'}`}>
+                            {ageCheckResult.du_tuoi 
+                              ? <><i className="fa-solid fa-circle-check me-1"></i>Đủ tuổi ({ageCheckResult.tuoi} tuổi)</>
+                              : <><i className="fa-solid fa-circle-xmark me-1"></i>Chưa đủ 18 tuổi ({ageCheckResult.tuoi} tuổi)</>}
+                          </div>
+                        )}
+                      </div>
                       <div className="col-md-6"><label className="small fw-bold">Giới tính *</label><select className="form-select" required value={formData.gioitinh} onChange={e => setFormData({...formData, gioitinh: e.target.value})}><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
                       <div className="col-12">
                         <label className="small fw-bold">Phân vào lớp  *</label>
